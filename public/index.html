@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compactador & Otimizador de Mídia (Imagens e Vídeos)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-content">
+        <div class="badge-status">
+          <span class="status-dot"></span> Studio Ready
+        </div>
+        <div class="title-with-annotation">
+          <h1>Compactador & Otimizador</h1>
+          <span class="handwritten-annotation">high-speed batch tool</span>
+        </div>
+        <p class="subtitle">Processamento em lote direto de <code>origens/</code> para <code>compact/</code> preservando estrutura de pastas e fidelidade visual.</p>
+      </div>
+
+      <!-- Abas de Navegação Estilo ProtoPie -->
+      <div class="tabs-nav">
+        <button type="button" class="tab-btn active" data-tab="images" id="tabBtnImages">
+          <span class="tab-icon">🖼️</span>
+          <span>Imagens</span>
+          <span class="tab-badge" id="badgeImgCount">0</span>
+        </button>
+        <button type="button" class="tab-btn" data-tab="videos" id="tabBtnVideos">
+          <span class="tab-icon">🎬</span>
+          <span>Vídeos</span>
+          <span class="tab-badge" id="badgeVideoCount">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <!-- Painel de Configurações -->
+      <section class="card config-card">
+        <div class="card-header">
+          <h2 id="configCardTitle">Parâmetros para Imagens</h2>
+          <button id="btnRefreshScan" class="btn-icon" title="Atualizar varredura da pasta origens">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Verificar pasta</span>
+          </button>
+        </div>
+
+        <div class="folder-summary" id="folderSummary">
+          <div class="summary-item">
+            <span class="label">Arquivos detectados</span>
+            <span class="value" id="totalScanCount">Carregando...</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">Tamanho total</span>
+            <span class="value" id="totalScanSize">-</span>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO DE IMAGENS -->
+        <form id="imageForm" class="form-container tab-content active">
+          <div class="dimensions-row">
+            <div class="form-group">
+              <label for="imgMaxWidth">
+                Largura Máxima (px)
+                <span class="tooltip" title="Limite máximo de largura. A proporção original será sempre mantida.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="imgMaxWidth" name="maxWidth" placeholder="Ex: 1920" value="1200" min="10" max="10000">
+                <span class="unit">px</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="imgMaxHeight">
+                Altura Máxima (px)
+                <span class="tooltip" title="Limite máximo de altura. A proporção original será sempre mantida.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="imgMaxHeight" name="maxHeight" placeholder="Ex: 1080" value="1200" min="10" max="10000">
+                <span class="unit">px</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-val">
+              <label for="imgQuality">Qualidade da Compressão</label>
+              <span id="imgQualityVal" class="quality-badge">80%</span>
+            </div>
+            <input type="range" id="imgQuality" name="quality" min="10" max="100" value="80" class="range-slider">
+            <div class="range-marks">
+              <span>Menor arquivo (10%)</span>
+              <span>Equilibrado (80%)</span>
+              <span>Qualidade Máxima (100%)</span>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <div>
+              <strong>Processamento de Imagens:</strong>
+              <ul>
+                <li>Preserva nomes de arquivo e extensões originais (.png, .jpg, .webp).</li>
+                <li>Mantém a mesma hierarquia de subpastas em <code>compact/</code>.</li>
+                <li>Redimensiona de forma proporcional sem distorção nem upscale.</li>
+              </ul>
+            </div>
+          </div>
+
+          <button type="submit" id="btnStartImg" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Iniciar Compactação de Imagens</span>
+          </button>
+        </form>
+
+        <!-- FORMULÁRIO DE VÍDEOS -->
+        <form id="videoForm" class="form-container tab-content">
+          <div class="form-group">
+            <label for="videoCodec">Codec de Vídeo</label>
+            <select id="videoCodec" name="codec" class="form-select">
+              <option value="h264" selected>H.264 / AVC (Recomendado — Máxima compatibilidade Web/Mobile)</option>
+              <option value="h265">H.265 / HEVC (Maior taxa de compressão — Dispositivos modernos)</option>
+            </select>
+          </div>
+
+          <div class="form-check-group">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="removeAudio" name="removeAudio" checked>
+              <span class="checkmark"></span>
+              <div class="check-text">
+                <span class="check-title">Remover faixa de áudio (Mudo)</span>
+                <span class="check-desc">Ideal para banners, backgrounds e vitrines de produtos. Reduz substancialmente o tamanho do arquivo.</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="dimensions-row">
+            <div class="form-group">
+              <label for="videoMaxWidth">
+                Largura Máxima (px)
+                <span class="tooltip" title="Deixe vazio para manter resolução original.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="videoMaxWidth" name="maxWidth" placeholder="Ex: 1920" value="1920" min="10" max="7680">
+                <span class="unit">px</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="videoMaxHeight">
+                Altura Máxima (px)
+                <span class="tooltip" title="Deixe vazio para manter resolução original.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="videoMaxHeight" name="maxHeight" placeholder="Ex: 1080" value="1080" min="10" max="4320">
+                <span class="unit">px</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-val">
+              <label for="videoCrf">
+                Qualidade de Compressão (CRF)
+                <span class="tooltip" title="Valores menores = maior qualidade e arquivo maior. 24 é o equilíbrio perfeito.">ℹ️</span>
+              </label>
+              <span id="videoCrfVal" class="quality-badge">CRF 24 (Equilibrado)</span>
+            </div>
+            <input type="range" id="videoCrf" name="crf" min="18" max="32" value="24" class="range-slider">
+            <div class="range-marks">
+              <span>Máxima Qualidade (18)</span>
+              <span>Equilibrado (24)</span>
+              <span>Menor Tamanho (32)</span>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <div>
+              <strong>Processamento de Vídeos:</strong>
+              <ul>
+                <li>Saída em <code>.mp4</code> otimizado com flag de streaming rápido (faststart).</li>
+                <li>Mantém a mesma hierarquia de subpastas em <code>compact/</code>.</li>
+                <li>Redimensiona proporcionalmente mantendo dimensões compatíveis com o encoder.</li>
+              </ul>
+            </div>
+          </div>
+
+          <button type="submit" id="btnStartVideo" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Iniciar Compactação de Vídeos</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Painel de Progresso & Resultados -->
+      <section class="card progress-card" id="progressCard">
+        <div class="card-header">
+          <h2>Status do Processamento</h2>
+          <span id="statusBadge" class="status-pill status-idle">Aguardando início</span>
+        </div>
+
+        <div class="progress-section">
+          <div class="progress-header">
+            <span id="progressText">0 / 0 itens</span>
+            <span id="progressPercent" class="progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="progressBar" class="progress-bar-fill" style="width: 0%"></div>
+          </div>
+          <div id="currentFileText" class="current-file">Nenhum processamento em andamento</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-label">Concluídos</span>
+            <span class="stat-value" id="statProcessed">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Original Total</span>
+            <span class="stat-value" id="statOriginalSize">0 MB</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Compactado Total</span>
+            <span class="stat-value" id="statCompactSize">0 MB</span>
+          </div>
+          <div class="stat-box highlight">
+            <span class="stat-label">Economia</span>
+            <span class="stat-value" id="statSavings">0%</span>
+          </div>
+        </div>
+
+        <div class="log-section">
+          <div class="log-header">
+            <h3>Arquivos Processados em Tempo Real</h3>
+            <span id="logCount" class="log-counter">0 itens</span>
+          </div>
+          <div class="log-container" id="logContainer">
+            <div class="empty-log">Clique em "Iniciar" para começar o lote.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

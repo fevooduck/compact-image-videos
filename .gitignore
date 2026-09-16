@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+
+# Pastas de trabalho (conteúdo local do usuário)
+origens/*
+compact/*
+!origens/.gitkeep
+!compact/.gitkeep
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Logs e caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.cache/
+tmp/
+
+# Sistema operacional
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+*.Zone.Identifier
+
+# Editores / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
