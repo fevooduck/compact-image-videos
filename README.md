@@ -35,6 +35,13 @@ Esta aplicação resolve esse problema com uma abordagem **local-first**:
 - **FastStart para Web**: Aplica automaticamente a flag `-movflags +faststart`, movendo os metadados para o cabeçalho do arquivo e permitindo streaming instantâneo sem precisar aguardar o download completo.
 - **Dimensões Compatíveis**: Ajusta automaticamente resoluções para números pares (`trunc(iw/2)*2`), prevenindo erros comuns de codificação.
 
+### 📸 Extração de Primeiro Frame (via FFmpeg)
+- **Aba Dedicada**: Trabalha com vídeos já prontos, sem re-encodar nada — apenas o frame inicial é decodificado e salvo como imagem.
+- **Origem Selecionável**: Aponte para `compact/` (vídeos já compactados por esta ferramenta) ou `origens/` (arquivos brutos).
+- **Formatos de Saída**: `JPG` (menor arquivo), `WebP` (melhor compressão) ou `PNG` (sem perdas), com controle de qualidade.
+- **Redimensionamento Opcional**: Deixe largura e altura vazias para manter a resolução nativa do vídeo.
+- **Saída Organizada**: Grava em `frames/` mantendo a mesma hierarquia de subpastas e o nome do vídeo — pronto para usar no atributo `poster` de `<video>` ou como thumbnail.
+
 ### 🛠️ Experiência & Infraestrutura
 - **Preservação de Subpastas**: Se a imagem estiver em `origens/produtos/calcados/tenis.jpg`, a saída será exatamente em `compact/produtos/calcados/tenis.jpg`.
 - **Filtro Automático do Sistema**: Ignora streams alternativos do Windows (como `*.Zone.Identifier`) e arquivos ocultos.
@@ -52,17 +59,19 @@ compact-images/
 │   └── .gitkeep        # Mantém a pasta no repositório (conteúdo é ignorado pelo Git)
 ├── compact/            # 📤 Onde os arquivos compactados são gerados
 │   └── .gitkeep        # Mantém a pasta no repositório (conteúdo é ignorado pelo Git)
+├── frames/             # 🖼️ Onde os primeiros frames extraídos são gerados
+│   └── .gitkeep        # Mantém a pasta no repositório (conteúdo é ignorado pelo Git)
 ├── public/             # 🎨 Interface Web
 │   ├── index.html      # Estrutura da aplicação
 │   ├── style.css       # Estilos e design tokens (ProtoPie Light Theme)
 │   └── app.js          # Lógica de conexão em tempo real (SSE) e controles
 ├── server.js           # ⚙️ Servidor Node.js (Express, Sharp e FFmpeg)
 ├── package.json        # Dependências do projeto
-├── .gitignore          # Ignora node_modules e a mídia local de origens/ e compact/
+├── .gitignore          # Ignora node_modules e a mídia local de origens/, compact/ e frames/
 └── README.md           # Documentação completa
 ```
 
-> **Sobre `origens/` e `compact/`**: as duas pastas fazem parte do repositório (via `.gitkeep`), mas **todo o conteúdo delas é ignorado pelo Git** — suas mídias nunca serão commitadas por acidente. Se as pastas não existirem, o servidor as cria automaticamente ao iniciar.
+> **Sobre `origens/`, `compact/` e `frames/`**: as três pastas fazem parte do repositório (via `.gitkeep`), mas **todo o conteúdo delas é ignorado pelo Git** — suas mídias nunca serão commitadas por acidente. Se as pastas não existirem, o servidor as cria automaticamente ao iniciar.
 
 ---
 
@@ -106,12 +115,14 @@ Acesse:
 2. **Abrir a ferramenta**: No topo da tela, escolha a aba desejada:
    - **🖼️ Imagens**
    - **🎬 Vídeos**
+   - **📸 Primeiro Frame**
 3. **Ajustar os parâmetros**:
    - **Para Imagens**: Informe a Largura e Altura máxima (ex: `1200x1200px`) e o nível de qualidade desejado (ex: `80%`).
    - **Para Vídeos**: Escolha o Codec (H.264 recomendado), marque ou desmarque "Remover áudio", defina a resolução máxima e o nível CRF.
+   - **Para Primeiro Frame**: Escolha a pasta de origem (`compact/` ou `origens/`), o formato da imagem e a qualidade. Não é necessário adicionar nada em `origens/` — a aba trabalha com vídeos já prontos.
 4. **Iniciar**: Clique no botão principal para iniciar o processamento.
 5. **Acompanhar**: Veja a barra de progresso, a economia de espaço em tempo real e a lista detalhada de arquivos.
-6. **Pronto!** Seus arquivos prontos para produção estarão disponíveis na pasta `compact/`.
+6. **Pronto!** Seus arquivos prontos para produção estarão disponíveis na pasta `compact/` (ou em `frames/`, no caso das imagens de primeiro frame).
 
 ---
 
@@ -121,6 +132,7 @@ Acesse:
 | :--- | :--- | :--- | :--- |
 | **Imagens** | `.jpg`, `.jpeg`, `.png`, `.webp`, `.avif`, `.tiff`, `.tif`, `.gif` | Mantém a extensão original | **Sharp** |
 | **Vídeos** | `.mp4`, `.mov`, `.avi`, `.webm`, `.mkv`, `.m4v`, `.flv`, `.wmv` | `.mp4` otimizado para web | **FFmpeg** |
+| **Primeiro Frame** | Os mesmos formatos de vídeo acima | `.jpg`, `.webp` ou `.png` em `frames/` | **FFmpeg** |
 
 ---
 

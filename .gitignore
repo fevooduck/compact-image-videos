@@ -4,8 +4,10 @@ node_modules/
 # Pastas de trabalho (conteúdo local do usuário)
 origens/*
 compact/*
+frames/*
 !origens/.gitkeep
 !compact/.gitkeep
+!frames/.gitkeep
 
 # Variáveis de ambiente
 .env

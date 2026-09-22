@@ -11,12 +11,15 @@ function formatBytes(bytes, decimals = 1) {
 // Elementos do DOM
 const tabBtnImages = document.getElementById('tabBtnImages');
 const tabBtnVideos = document.getElementById('tabBtnVideos');
+const tabBtnFrames = document.getElementById('tabBtnFrames');
 const imageForm = document.getElementById('imageForm');
 const videoForm = document.getElementById('videoForm');
+const frameForm = document.getElementById('frameForm');
 const configCardTitle = document.getElementById('configCardTitle');
 
 const badgeImgCount = document.getElementById('badgeImgCount');
 const badgeVideoCount = document.getElementById('badgeVideoCount');
+const badgeFrameCount = document.getElementById('badgeFrameCount');
 const totalScanCountEl = document.getElementById('totalScanCount');
 const totalScanSizeEl = document.getElementById('totalScanSize');
 const btnRefreshScan = document.getElementById('btnRefreshScan');
@@ -30,6 +33,12 @@ const btnStartImg = document.getElementById('btnStartImg');
 const videoCrfSlider = document.getElementById('videoCrf');
 const videoCrfValEl = document.getElementById('videoCrfVal');
 const btnStartVideo = document.getElementById('btnStartVideo');
+
+// Controles de Extração de Frame
+const frameSourceSelect = document.getElementById('frameSource');
+const frameQualitySlider = document.getElementById('frameQuality');
+const frameQualityValEl = document.getElementById('frameQualityVal');
+const btnStartFrame = document.getElementById('btnStartFrame');
 
 // Painel de Status & Progresso
 const statusBadge = document.getElementById('statusBadge');
@@ -51,30 +60,32 @@ let eventSource = null;
 let processedItemCount = 0;
 let accumulatedOrigBytes = 0;
 let accumulatedCompBytes = 0;
-let scanData = { images: { count: 0, totalBytes: 0 }, videos: { count: 0, totalBytes: 0 } };
+let scanData = {
+  images: { count: 0, totalBytes: 0 },
+  videos: { count: 0, totalBytes: 0 },
+  compactVideos: { count: 0, totalBytes: 0 }
+};
+
+const TABS = {
+  images: { btn: tabBtnImages, form: imageForm, title: 'Parâmetros para Imagens' },
+  videos: { btn: tabBtnVideos, form: videoForm, title: 'Parâmetros para Vídeos' },
+  frames: { btn: tabBtnFrames, form: frameForm, title: 'Parâmetros para Extração de Frame' }
+};
 
 // Gerenciamento de Abas
 function switchTab(tab) {
   currentTab = tab;
-  if (tab === 'images') {
-    tabBtnImages.classList.add('active');
-    tabBtnVideos.classList.remove('active');
-    imageForm.classList.add('active');
-    videoForm.classList.remove('active');
-    configCardTitle.textContent = 'Parâmetros para Imagens';
-    updateSummaryDisplay();
-  } else {
-    tabBtnVideos.classList.add('active');
-    tabBtnImages.classList.remove('active');
-    videoForm.classList.add('active');
-    imageForm.classList.remove('active');
-    configCardTitle.textContent = 'Parâmetros para Vídeos';
-    updateSummaryDisplay();
+  for (const [name, refs] of Object.entries(TABS)) {
+    refs.btn.classList.toggle('active', name === tab);
+    refs.form.classList.toggle('active', name === tab);
   }
+  configCardTitle.textContent = TABS[tab].title;
+  updateSummaryDisplay();
 }
 
-tabBtnImages.addEventListener('click', () => switchTab('images'));
-tabBtnVideos.addEventListener('click', () => switchTab('videos'));
+for (const [name, refs] of Object.entries(TABS)) {
+  refs.btn.addEventListener('click', () => switchTab(name));
+}
 
 // Sliders
 imgQualitySlider.addEventListener('input', (e) => {
@@ -90,14 +101,38 @@ videoCrfSlider.addEventListener('input', (e) => {
   videoCrfValEl.textContent = `CRF ${val} (${desc})`;
 });
 
+frameQualitySlider.addEventListener('input', (e) => {
+  frameQualityValEl.textContent = `${e.target.value}%`;
+});
+
+frameSourceSelect.addEventListener('change', () => {
+  badgeFrameCount.textContent = frameSourceData().count;
+  updateSummaryDisplay();
+  updateStartButtons();
+});
+
+function frameSourceData() {
+  return frameSourceSelect.value === 'origens' ? scanData.videos : scanData.compactVideos;
+}
+
 function updateSummaryDisplay() {
   if (currentTab === 'images') {
     totalScanCountEl.textContent = `${scanData.images.count} imagem(ns)`;
     totalScanSizeEl.textContent = formatBytes(scanData.images.totalBytes);
-  } else {
+  } else if (currentTab === 'videos') {
     totalScanCountEl.textContent = `${scanData.videos.count} vídeo(s)`;
     totalScanSizeEl.textContent = formatBytes(scanData.videos.totalBytes);
+  } else {
+    const source = frameSourceData();
+    totalScanCountEl.textContent = `${source.count} vídeo(s) em ${frameSourceSelect.value}/`;
+    totalScanSizeEl.textContent = formatBytes(source.totalBytes);
   }
+}
+
+function updateStartButtons() {
+  btnStartImg.disabled = scanData.images.count === 0;
+  btnStartVideo.disabled = scanData.videos.count === 0;
+  btnStartFrame.disabled = frameSourceData().count === 0;
 }
 
 // Varredura da pasta origens
@@ -107,13 +142,16 @@ async function scanFolder() {
     const res = await fetch('/api/scan');
     const data = await res.json();
     if (data.success) {
-      scanData = data;
-      badgeImgCount.textContent = data.images ? data.images.count : data.count;
-      badgeVideoCount.textContent = data.videos ? data.videos.count : 0;
+      scanData = {
+        images: data.images || { count: data.count || 0, totalBytes: data.totalBytes || 0 },
+        videos: data.videos || { count: 0, totalBytes: 0 },
+        compactVideos: data.compactVideos || { count: 0, totalBytes: 0 }
+      };
+      badgeImgCount.textContent = scanData.images.count;
+      badgeVideoCount.textContent = scanData.videos.count;
+      badgeFrameCount.textContent = frameSourceData().count;
       updateSummaryDisplay();
-
-      btnStartImg.disabled = (data.images && data.images.count === 0);
-      btnStartVideo.disabled = (data.videos && data.videos.count === 0);
+      updateStartButtons();
     } else {
       totalScanCountEl.textContent = 'Erro ao ler pasta';
     }
@@ -175,6 +213,7 @@ function resetProgressUI(title) {
 
   btnStartImg.disabled = true;
   btnStartVideo.disabled = true;
+  btnStartFrame.disabled = true;
 
   statProcessed.textContent = '0';
   statOriginalSize.textContent = '0 MB';
@@ -194,11 +233,14 @@ function handleSSE(url, activeButton) {
     const data = JSON.parse(event.data);
 
     if (data.type === 'start') {
-      const typeLabel = data.mediaType === 'video' ? 'vídeos' : 'imagens';
+      const labels = { video: 'vídeos', frame: 'vídeos', image: 'imagens' };
+      const typeLabel = labels[data.mediaType] || 'imagens';
       progressText.textContent = `0 / ${data.total} ${typeLabel}`;
       currentFileText.textContent = `Iniciando processamento de ${data.total} ${typeLabel}...`;
     } else if (data.type === 'video_encoding_start') {
       currentFileText.textContent = `Codificando vídeo [${data.index}/${data.total}]: ${data.file}...`;
+    } else if (data.type === 'frame_extract_start') {
+      currentFileText.textContent = `Extraindo primeiro frame [${data.index}/${data.total}]: ${data.file}...`;
     } else if (data.type === 'progress') {
       processedItemCount++;
       accumulatedOrigBytes += data.originalSize;
@@ -229,10 +271,9 @@ function handleSSE(url, activeButton) {
 
       statusBadge.className = 'status-pill status-done';
       statusBadge.textContent = 'Concluído!';
-      btnStartImg.disabled = false;
-      btnStartVideo.disabled = false;
 
-      currentFileText.textContent = `Sucesso! Todos os arquivos foram salvos na pasta compact/`;
+      const outputDir = data.outputDir || 'compact/';
+      currentFileText.textContent = `Sucesso! Todos os arquivos foram salvos na pasta ${outputDir}`;
       progressBar.style.width = '100%';
       progressPercent.textContent = '100%';
 
@@ -242,21 +283,22 @@ function handleSSE(url, activeButton) {
         statCompactSize.textContent = formatBytes(data.summary.totalCompactBytes);
         statSavings.textContent = `${data.summary.totalSavedPercent}%`;
       }
+
+      // Revarre as pastas: a compactação alimenta a aba de frames
+      scanFolder();
     } else if (data.type === 'empty') {
       eventSource.close();
       eventSource = null;
       statusBadge.className = 'status-pill status-idle';
       statusBadge.textContent = 'Pasta vazia';
-      btnStartImg.disabled = false;
-      btnStartVideo.disabled = false;
+      updateStartButtons();
       currentFileText.textContent = data.message;
     } else if (data.type === 'fatal_error') {
       eventSource.close();
       eventSource = null;
       statusBadge.className = 'status-pill badge-error';
       statusBadge.textContent = 'Erro fatal';
-      btnStartImg.disabled = false;
-      btnStartVideo.disabled = false;
+      updateStartButtons();
       currentFileText.textContent = `Erro: ${data.error}`;
     }
   };
@@ -267,8 +309,7 @@ function handleSSE(url, activeButton) {
       eventSource.close();
       eventSource = null;
     }
-    btnStartImg.disabled = false;
-    btnStartVideo.disabled = false;
+    updateStartButtons();
     statusBadge.className = 'status-pill badge-error';
     statusBadge.textContent = 'Erro de Conexão';
     currentFileText.textContent = 'Conexão interrompida. Verifique o servidor local.';
@@ -311,6 +352,27 @@ videoForm.addEventListener('submit', (e) => {
 
   resetProgressUI('Iniciando conversão e compressão de vídeos via FFmpeg...');
   handleSSE(`/api/process-videos?${queryParams.toString()}`, btnStartVideo);
+});
+
+// Submissão do Formulário de Extração de Primeiro Frame
+frameForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+
+  const source = frameSourceSelect.value;
+  const format = document.getElementById('frameFormat').value;
+  const quality = frameQualitySlider.value;
+  const maxWidth = document.getElementById('frameMaxWidth').value.trim();
+  const maxHeight = document.getElementById('frameMaxHeight').value.trim();
+
+  const queryParams = new URLSearchParams();
+  queryParams.append('source', source);
+  queryParams.append('format', format);
+  queryParams.append('quality', quality);
+  if (maxWidth) queryParams.append('maxWidth', maxWidth);
+  if (maxHeight) queryParams.append('maxHeight', maxHeight);
+
+  resetProgressUI(`Extraindo o primeiro frame dos vídeos em ${source}/...`);
+  handleSSE(`/api/extract-frames?${queryParams.toString()}`, btnStartFrame);
 });
 
 // Inicialização

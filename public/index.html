@@ -35,6 +35,11 @@
           <span>Vídeos</span>
           <span class="tab-badge" id="badgeVideoCount">0</span>
         </button>
+        <button type="button" class="tab-btn" data-tab="frames" id="tabBtnFrames">
+          <span class="tab-icon">📸</span>
+          <span>Primeiro Frame</span>
+          <span class="tab-badge" id="badgeFrameCount">0</span>
+        </button>
       </div>
     </header>
 
@@ -207,6 +212,89 @@
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
             <span>Iniciar Compactação de Vídeos</span>
+          </button>
+        </form>
+
+        <!-- FORMULÁRIO DE EXTRAÇÃO DE PRIMEIRO FRAME -->
+        <form id="frameForm" class="form-container tab-content">
+          <div class="form-group">
+            <label for="frameSource">
+              Pasta de origem dos vídeos
+              <span class="tooltip" title="Use compact/ para vídeos já compactados por esta ferramenta, ou origens/ para os arquivos brutos.">ℹ️</span>
+            </label>
+            <select id="frameSource" name="source" class="form-select">
+              <option value="compact" selected>compact/ — vídeos já prontos (Recomendado)</option>
+              <option value="origens">origens/ — arquivos originais</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="frameFormat">Formato da imagem</label>
+            <select id="frameFormat" name="format" class="form-select">
+              <option value="jpg" selected>JPG (Menor arquivo — ideal para poster de vídeo)</option>
+              <option value="webp">WebP (Melhor compressão — navegadores modernos)</option>
+              <option value="png">PNG (Sem perdas — arquivo maior)</option>
+            </select>
+          </div>
+
+          <div class="dimensions-row">
+            <div class="form-group">
+              <label for="frameMaxWidth">
+                Largura Máxima (px)
+                <span class="tooltip" title="Deixe vazio para manter a resolução nativa do vídeo.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="frameMaxWidth" name="maxWidth" placeholder="Resolução nativa" min="10" max="7680">
+                <span class="unit">px</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="frameMaxHeight">
+                Altura Máxima (px)
+                <span class="tooltip" title="Deixe vazio para manter a resolução nativa do vídeo.">ℹ️</span>
+              </label>
+              <div class="input-wrapper">
+                <input type="number" id="frameMaxHeight" name="maxHeight" placeholder="Resolução nativa" min="10" max="4320">
+                <span class="unit">px</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-val">
+              <label for="frameQuality">Qualidade da Imagem</label>
+              <span id="frameQualityVal" class="quality-badge">85%</span>
+            </div>
+            <input type="range" id="frameQuality" name="quality" min="10" max="100" value="85" class="range-slider">
+            <div class="range-marks">
+              <span>Menor arquivo (10%)</span>
+              <span>Recomendado (85%)</span>
+              <span>Qualidade Máxima (100%)</span>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <div>
+              <strong>Extração de Primeiro Frame:</strong>
+              <ul>
+                <li>Sem re-encode do vídeo: apenas o frame inicial é salvo como imagem.</li>
+                <li>Saída na pasta <code>frames/</code>, com a mesma hierarquia de subpastas.</li>
+                <li>Perfeito para o atributo <code>poster</code> de <code>&lt;video&gt;</code> e thumbnails.</li>
+              </ul>
+            </div>
+          </div>
+
+          <button type="submit" id="btnStartFrame" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Extrair Primeiro Frame</span>
           </button>
         </form>
       </section>

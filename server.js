@@ -13,6 +13,7 @@ const app = express();
 
 const ORIGENS_DIR = path.join(__dirname, 'origens');
 const COMPACT_DIR = path.join(__dirname, 'compact');
+const FRAMES_DIR = path.join(__dirname, 'frames');
 
 const IMAGE_EXTENSIONS = new Set([
   '.jpg', '.jpeg', '.png', '.webp', '.tiff', '.tif', '.avif', '.gif'
@@ -21,6 +22,71 @@ const IMAGE_EXTENSIONS = new Set([
 const VIDEO_EXTENSIONS = new Set([
   '.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.flv', '.wmv', '.mpeg', '.mpg'
 ]);
+
+const FRAME_FORMATS = new Set(['jpg', 'webp', 'png']);
+
+// Redimensionamento proporcional (garantindo dimensões pares para os encoders)
+function buildScaleFilters(maxWidth, maxHeight) {
+  if (maxWidth && maxHeight) {
+    return [
+      `scale='min(${maxWidth},iw)':'min(${maxHeight},ih)':force_original_aspect_ratio=decrease`,
+      'scale=trunc(iw/2)*2:trunc(ih/2)*2'
+    ];
+  }
+  if (maxWidth) {
+    return [`scale='min(${maxWidth},iw)':-2`];
+  }
+  if (maxHeight) {
+    return [`scale=-2:'min(${maxHeight},ih)'`];
+  }
+  return ['scale=trunc(iw/2)*2:trunc(ih/2)*2'];
+}
+
+function runFfmpeg(args, onProcess) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, args);
+    if (onProcess) onProcess(proc);
+
+    let stderrOutput = '';
+    proc.stderr.on('data', (data) => {
+      stderrOutput += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      if (onProcess) onProcess(null);
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`FFmpeg finalizou com código ${code}: ${stderrOutput.slice(-300)}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      if (onProcess) onProcess(null);
+      reject(err);
+    });
+  });
+}
+
+// Extrai o primeiro frame do vídeo como imagem estática (poster)
+function extractFirstFrame({ sourcePath, destPath, format, quality, scaleFilters }, onProcess) {
+  const args = ['-y', '-i', sourcePath, '-map', '0:v:0', '-frames:v', '1', '-update', '1'];
+
+  if (scaleFilters.length > 0) {
+    args.push('-vf', scaleFilters.join(','));
+  }
+
+  if (format === 'jpg') {
+    // Escala do ffmpeg: 2 (melhor) a 31 (pior)
+    const qv = Math.round(31 - ((quality / 100) * 29));
+    args.push('-q:v', String(Math.min(31, Math.max(2, qv))));
+  } else if (format === 'webp') {
+    args.push('-c:v', 'libwebp', '-quality', String(quality));
+  }
+
+  args.push(destPath);
+  return runFfmpeg(args, onProcess);
+}
 
 function isIgnored(filename) {
   return filename.includes(':Zone.Identifier') || 
@@ -75,12 +141,19 @@ app.get('/api/scan', (req, res) => {
       fs.mkdirSync(ORIGENS_DIR, { recursive: true });
     }
     const { images, videos } = scanMediaRecursively(ORIGENS_DIR);
+    const { videos: compactVideos } = scanMediaRecursively(COMPACT_DIR);
 
     const imageBytes = images.reduce((acc, f) => acc + f.size, 0);
     const videoBytes = videos.reduce((acc, f) => acc + f.size, 0);
+    const compactVideoBytes = compactVideos.reduce((acc, f) => acc + f.size, 0);
 
     res.json({
       success: true,
+      compactVideos: {
+        count: compactVideos.length,
+        totalBytes: compactVideoBytes,
+        files: compactVideos.map(f => ({ relativePath: f.relativePath, size: f.size, ext: f.ext }))
+      },
       images: {
         count: images.length,
         totalBytes: imageBytes,
@@ -309,71 +382,38 @@ app.get('/api/process-videos', async (req, res) => {
         file: file.relativePath
       });
 
+      const scaleFilters = buildScaleFilters(maxWidth, maxHeight);
+
       try {
-        await new Promise((resolve, reject) => {
-          const ffmpegArgs = ['-y', '-i', file.absolutePath];
+        const ffmpegArgs = ['-y', '-i', file.absolutePath];
 
-          // Codec de Vídeo
-          if (codec === 'h265') {
-            ffmpegArgs.push('-c:v', 'libx265', '-tag:v', 'hvc1');
-          } else {
-            ffmpegArgs.push('-c:v', 'libx264', '-pix_fmt', 'yuv420p');
-          }
+        // Codec de Vídeo
+        if (codec === 'h265') {
+          ffmpegArgs.push('-c:v', 'libx265', '-tag:v', 'hvc1');
+        } else {
+          ffmpegArgs.push('-c:v', 'libx264', '-pix_fmt', 'yuv420p');
+        }
 
-          // Qualidade CRF e Preset
-          ffmpegArgs.push('-crf', String(crf));
-          ffmpegArgs.push('-preset', 'fast');
+        // Qualidade CRF e Preset
+        ffmpegArgs.push('-crf', String(crf));
+        ffmpegArgs.push('-preset', 'fast');
 
-          // Áudio
-          if (removeAudio) {
-            ffmpegArgs.push('-an');
-          } else {
-            ffmpegArgs.push('-c:a', 'aac', '-b:a', '128k');
-          }
+        // Áudio
+        if (removeAudio) {
+          ffmpegArgs.push('-an');
+        } else {
+          ffmpegArgs.push('-c:a', 'aac', '-b:a', '128k');
+        }
 
-          // Redimensionamento proporcional (garantindo dimensões pares para H.264)
-          const scaleFilters = [];
-          if (maxWidth && maxHeight) {
-            scaleFilters.push(`scale='min(${maxWidth},iw)':'min(${maxHeight},ih)':force_original_aspect_ratio=decrease`);
-            scaleFilters.push('scale=trunc(iw/2)*2:trunc(ih/2)*2');
-          } else if (maxWidth) {
-            scaleFilters.push(`scale='min(${maxWidth},iw)':-2`);
-          } else if (maxHeight) {
-            scaleFilters.push(`scale=-2:'min(${maxHeight},ih)'`);
-          } else {
-            scaleFilters.push('scale=trunc(iw/2)*2:trunc(ih/2)*2');
-          }
+        if (scaleFilters.length > 0) {
+          ffmpegArgs.push('-vf', scaleFilters.join(','));
+        }
 
-          if (scaleFilters.length > 0) {
-            ffmpegArgs.push('-vf', scaleFilters.join(','));
-          }
+        // Otimização para reprodução rápida na web (moov atom no início)
+        ffmpegArgs.push('-movflags', '+faststart');
+        ffmpegArgs.push(destPath);
 
-          // Otimização para reprodução rápida na web (moov atom no início)
-          ffmpegArgs.push('-movflags', '+faststart');
-          ffmpegArgs.push(destPath);
-
-          const proc = spawn(ffmpegPath, ffmpegArgs);
-          currentProcess = proc;
-
-          let stderrOutput = '';
-          proc.stderr.on('data', (data) => {
-            stderrOutput += data.toString();
-          });
-
-          proc.on('close', (code) => {
-            currentProcess = null;
-            if (code === 0) {
-              resolve();
-            } else {
-              reject(new Error(`FFmpeg finalizou com código ${code}: ${stderrOutput.slice(-300)}`));
-            }
-          });
-
-          proc.on('error', (err) => {
-            currentProcess = null;
-            reject(err);
-          });
-        });
+        await runFfmpeg(ffmpegArgs, (proc) => { currentProcess = proc; });
 
         const newStats = fs.statSync(destPath);
         totalCompactBytes += newStats.size;
@@ -426,6 +466,146 @@ app.get('/api/process-videos', async (req, res) => {
   }
 });
 
+// Extração do primeiro frame de vídeos já prontos (SSE)
+app.get('/api/extract-frames', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+
+  const sendEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let currentProcess = null;
+  let isCancelled = false;
+
+  req.on('close', () => {
+    isCancelled = true;
+    if (currentProcess) {
+      try {
+        currentProcess.kill('SIGKILL');
+      } catch (e) {
+        // Ignora
+      }
+    }
+  });
+
+  try {
+    const sourceDir = req.query.source === 'origens' ? ORIGENS_DIR : COMPACT_DIR;
+    const sourceLabel = sourceDir === ORIGENS_DIR ? 'origens' : 'compact';
+    const format = FRAME_FORMATS.has(req.query.format) ? req.query.format : 'jpg';
+    const quality = req.query.quality
+      ? Math.min(100, Math.max(10, parseInt(req.query.quality, 10)))
+      : 85;
+    const maxWidth = req.query.maxWidth ? parseInt(req.query.maxWidth, 10) : null;
+    const maxHeight = req.query.maxHeight ? parseInt(req.query.maxHeight, 10) : null;
+
+    const { videos: files } = scanMediaRecursively(sourceDir);
+
+    if (files.length === 0) {
+      sendEvent({ type: 'empty', message: `Nenhum vídeo encontrado na pasta ${sourceLabel}.` });
+      res.end();
+      return;
+    }
+
+    sendEvent({ type: 'start', total: files.length, mediaType: 'frame' });
+
+    if (!fs.existsSync(FRAMES_DIR)) {
+      fs.mkdirSync(FRAMES_DIR, { recursive: true });
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+    let totalOriginalBytes = 0;
+    let totalFrameBytes = 0;
+
+    // Sem limite de dimensão, o frame mantém a resolução nativa do vídeo
+    const scaleFilters = (maxWidth || maxHeight) ? buildScaleFilters(maxWidth, maxHeight) : [];
+
+    for (let i = 0; i < files.length; i++) {
+      if (isCancelled) break;
+
+      const file = files[i];
+      totalOriginalBytes += file.size;
+
+      const parsedRel = path.parse(file.relativePath);
+      const destRelPath = path.join(parsedRel.dir, `${parsedRel.name}.${format}`);
+      const destPath = path.join(FRAMES_DIR, destRelPath);
+      const destDir = path.dirname(destPath);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      sendEvent({
+        type: 'frame_extract_start',
+        index: i + 1,
+        total: files.length,
+        file: file.relativePath
+      });
+
+      try {
+        await extractFirstFrame({
+          sourcePath: file.absolutePath,
+          destPath,
+          format,
+          quality,
+          scaleFilters
+        }, (proc) => { currentProcess = proc; });
+
+        const newStats = fs.statSync(destPath);
+        totalFrameBytes += newStats.size;
+        processedCount++;
+
+        sendEvent({
+          type: 'progress',
+          index: i + 1,
+          total: files.length,
+          file: destRelPath,
+          originalSize: file.size,
+          newSize: newStats.size,
+          savedBytes: file.size - newStats.size,
+          savedPercent: file.size > 0 ? (((file.size - newStats.size) / file.size) * 100).toFixed(1) : 0
+        });
+      } catch (frameErr) {
+        console.error(`Erro ao extrair frame de ${file.relativePath}:`, frameErr);
+        errorCount++;
+        sendEvent({
+          type: 'file_error',
+          index: i + 1,
+          total: files.length,
+          file: file.relativePath,
+          error: frameErr.message
+        });
+      }
+    }
+
+    if (!isCancelled) {
+      sendEvent({
+        type: 'done',
+        summary: {
+          total: files.length,
+          processed: processedCount,
+          errors: errorCount,
+          totalOriginalBytes,
+          totalCompactBytes: totalFrameBytes,
+          totalSavedBytes: totalOriginalBytes - totalFrameBytes,
+          totalSavedPercent: totalOriginalBytes > 0
+            ? (((totalOriginalBytes - totalFrameBytes) / totalOriginalBytes) * 100).toFixed(1)
+            : 0
+        },
+        outputDir: 'frames/'
+      });
+      res.end();
+    }
+  } catch (err) {
+    console.error('Erro geral na extração de frames:', err);
+    sendEvent({ type: 'fatal_error', error: err.message });
+    res.end();
+  }
+});
+
 function startServer(port) {
   const server = app.listen(port, '0.0.0.0', () => {
     const actualPort = server.address().port;
@@ -434,6 +614,7 @@ function startServer(port) {
     console.log(`👉 Acesse no navegador: http://localhost:${actualPort}`);
     console.log(`📂 Pasta Origens: ${ORIGENS_DIR}`);
     console.log(`📂 Pasta Compact: ${COMPACT_DIR}`);
+    console.log(`📂 Pasta Frames: ${FRAMES_DIR}`);
     console.log(`🎬 Suporte a Vídeo: FFmpeg integrado`);
     console.log(`======================================================\n`);
   });
@@ -449,7 +630,7 @@ function startServer(port) {
 }
 
 function ensureWorkDirs() {
-  for (const dir of [ORIGENS_DIR, COMPACT_DIR]) {
+  for (const dir of [ORIGENS_DIR, COMPACT_DIR, FRAMES_DIR]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
